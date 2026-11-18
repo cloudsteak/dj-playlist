@@ -34,14 +34,36 @@ MIME = {".js": "text/javascript", ".css": "text/css", ".webmanifest": "applicati
 COOKIE = "djsid"
 
 
+def prune_cache(directory, max_bytes, keep=None):
+    """Legrégebben használt előnézetek törlése, amíg a gyorsítótár a limit alá nem kerül."""
+    files = []
+    for name in os.listdir(directory):
+        p = os.path.join(directory, name)
+        if name.endswith(".m4a") and os.path.isfile(p):
+            files.append((os.path.getmtime(p), os.path.getsize(p), p))
+    total = sum(s for _, s, _ in files)
+    for _, size, p in sorted(files):
+        if total <= max_bytes:
+            break
+        if p == keep:
+            continue
+        try:
+            os.unlink(p)
+            total -= size
+        except OSError:
+            pass
+    return total
+
+
 class AgentServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, addr, *, library, store, token, web_root, cache_dir, allowed_hosts=(), verbose=False):
+    def __init__(self, addr, *, library, store, token, web_root, cache_dir, allowed_hosts=(), verbose=False, cache_max_bytes=5 * 1024**3):
         super().__init__(addr, Handler)
         self.lib, self.store, self.web_root, self.cache_dir, self.verbose = library, store, os.path.realpath(web_root), cache_dir, verbose
         self.token = token
+        self.cache_max_bytes = cache_max_bytes
         self.session = hmac.new(token.encode(), b"dj-session-v1", hashlib.sha256).hexdigest()
         self.allowed_hosts = {"localhost", "127.0.0.1", "[::1]", *(h.lower() for h in allowed_hosts)}
         self.allowed_suffixes = (".ts.net",)
@@ -231,6 +253,7 @@ class Handler(BaseHTTPRequestHandler):
         key = hashlib.sha1(f"{src}|{st.st_mtime_ns}|{st.st_size}".encode()).hexdigest()
         out = os.path.join(self.server.cache_dir, key + ".m4a")
         if os.path.isfile(out):
+            os.utime(out)  # "legutóbb használt": az LRU-törlés ez alapján dönt
             return out
         with self.server.transcode_guard:
             lock = self.server.transcode_locks.setdefault(key, threading.Lock())
@@ -246,6 +269,7 @@ class Handler(BaseHTTPRequestHandler):
                 if r.returncode != 0 or os.path.getsize(tmp) == 0:
                     return None
                 os.replace(tmp, out)
+                prune_cache(self.server.cache_dir, self.server.cache_max_bytes, keep=out)
                 return out
             except (subprocess.TimeoutExpired, OSError):
                 return None

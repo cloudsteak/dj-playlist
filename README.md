@@ -53,6 +53,7 @@ A háttérprogram alapból csak `127.0.0.1`-en figyel, vagyis a helyi hálózato
 
 - **XML-forrásnál a könyvtár nem élő:** amit a Rekordboxban változtatsz (új szám, kulcs), azt újra kell exportálnod. Az `--source db` mód (a Rekordbox `master.db` közvetlen, csak olvasható elérése a `pyrekordbox` csomaggal, `pip install pyrekordbox`) ezt megoldaná, **de ezt még nem próbáltam ki valódi Rekordbox-adatbázison**, ezért kísérleti. Az adatbázist a program soha nem írja.
 - A Rekordbox-adatbázisba **nem írunk** (korrupció-veszély); a visszaút az XML-import.
+- **Tárhely:** a zenefájlok **nem költöznek sehova**, a Mac-en maradnak, ahol most is vannak; a háttérprogram lejátszáskor streameli őket. Egyetlen helyi gyorsítótár van (`~/.dj-agent/cache`, AAC-előnézetek, kb. 1,2 MB/perc), ennek mérete korlátozott: alap 5 GB, `--cache-gb`-vel állítható, a legrégebben használtat törli. Felhőbe nem töltünk fel semmit.
 - A háttérprogram csak akkor érhető el, ha a Mac be van kapcsolva, és fut.
 
 ## Biztonság

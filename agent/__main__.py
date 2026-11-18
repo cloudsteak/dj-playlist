@@ -36,6 +36,7 @@ def main(argv=None):
     ap.add_argument("--host", default="127.0.0.1", help="figyelő cím (alap: csak helyi; távolihoz tailscale serve)")
     ap.add_argument("--port", type=int, default=8787)
     ap.add_argument("--allow-host", action="append", default=[], help="további engedélyezett Host fejléc (pl. a gép .local neve)")
+    ap.add_argument("--cache-gb", type=float, default=5, help="az AAC-előnézetek gyorsítótárának max. mérete GB-ban (alap: 5)")
     ap.add_argument("--rotate-token", action="store_true", help="új token (minden belépett eszköz kilép)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args(argv)
@@ -70,7 +71,7 @@ def main(argv=None):
     web_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     srv = AgentServer((args.host, args.port), library=lib, store=store, token=cfg["token"], web_root=web_root,
                       cache_dir=os.path.join(HOME, "cache"), allowed_hosts=args.allow_host + cfg.get("allowed_hosts", []),
-                      verbose=args.verbose)
+                      verbose=args.verbose, cache_max_bytes=int(args.cache_gb * 1024**3))
 
     def watcher():  # "indexes": a forrás változását figyeli, és újraindexel
         while True:

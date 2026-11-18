@@ -8,7 +8,7 @@ import unittest
 import wave
 
 from agent.library import Library, PlaylistStore
-from agent.server import AgentServer
+from agent.server import AgentServer, prune_cache
 from agent.sources import XmlSource
 
 TOKEN = "test-token-123"
@@ -146,6 +146,20 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(self.req("PUT", "/api/playlists/p2", {"name": "x", "trackIds": [1]})[0], 400)
         self.assertEqual(self.req("DELETE", "/api/playlists/abc-1")[2] is not None, True)
         self.assertEqual(self.req("GET", "/api/playlists")[1]["playlists"], [])
+
+    def test_cache_pruning_lru(self):
+        d = tempfile.mkdtemp()
+        try:
+            for i, age in enumerate((300, 200, 100)):  # 0 = legrégebbi
+                p = os.path.join(d, f"{i}.m4a"); open(p, "wb").write(b"x" * 1000)
+                os.utime(p, (1_000_000 - age, 1_000_000 - age))
+            open(os.path.join(d, "mas.txt"), "wb").write(b"x" * 5000)  # nem előnézet: nem nyúl hozzá
+            self.assertEqual(prune_cache(d, 2000), 2000)
+            self.assertEqual(sorted(f for f in os.listdir(d) if f.endswith(".m4a")), ["1.m4a", "2.m4a"])
+            prune_cache(d, 0, keep=os.path.join(d, "2.m4a"))  # a frissen készült mindig megmarad
+            self.assertEqual(sorted(f for f in os.listdir(d)), ["2.m4a", "mas.txt"])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
 
     def test_static_whitelist(self):
         self.assertEqual(self.req("GET", "/", auth=False, raw=True)[0], 200)
