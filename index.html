@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.anthropic.com; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self' https://api.anthropic.com; manifest-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#0b0c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="DJ Lista">
@@ -16,6 +16,7 @@
 <body data-view="library">
   <header class="top">
     <h1>DJ Playlist</h1>
+    <span id="conn" class="conn" hidden></span>
     <nav id="nav" class="nav">
       <button data-view="library">
         <svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm11-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
@@ -143,7 +144,16 @@
     </section>
 
     <section id="view-data" class="view">
-      <div class="card">
+      <div id="agent-card" class="card" hidden>
+        <h2>Kapcsolat a Mac-kel</h2>
+        <div id="a-status" class="muted"></div>
+        <div class="btnrow">
+          <button id="a-refresh" class="btn">Könyvtár újraolvasása</button>
+        </div>
+        <p class="muted">A háttérprogram figyeli a Rekordbox-forrást, és magától frissít. A listáid a Mac-en tárolódnak (így a telefonon és a gépen ugyanazok), és automatikusan Rekordbox-XML-be is kiíródnak.</p>
+      </div>
+
+      <div id="import-card" class="card">
         <h2>Rekordbox gyűjtemény importálása</h2>
         <ol class="steps">
           <li>Mac-en, Rekordboxban: <em>File → Export Collection in xml format</em>.</li>
@@ -181,6 +191,27 @@
       <button id="d-wipe" class="btn danger">Minden helyi adat törlése</button>
     </section>
   </main>
+
+  <div id="player" class="player" hidden>
+    <button id="p-toggle" class="pbtn" aria-label="Lejátszás">▶</button>
+    <div class="pmain">
+      <div id="p-title" class="title"></div>
+      <div id="p-sub" class="sub"></div>
+      <input id="p-seek" type="range" min="0" max="1000" value="0" aria-label="Pozíció">
+    </div>
+    <div id="p-time" class="ptime">–:–– / –:––</div>
+    <button id="p-close" class="pclose" aria-label="Lejátszó bezárása">✕</button>
+  </div>
+
+  <div id="login" class="login" hidden>
+    <div class="card">
+      <h2>Csatlakozás a Mac-hez</h2>
+      <p class="muted">Add meg a háttérprogram tokenjét (indításkor kiírja a Mac terminálja), vagy nyisd meg a párosító linket.</p>
+      <label class="block">Token <input id="l-token" type="password" autocomplete="off"></label>
+      <button id="l-go" class="btn primary wide">Belépés</button>
+      <div id="l-err" class="muted"></div>
+    </div>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script type="module" src="js/app.js"></script>

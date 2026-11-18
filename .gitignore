@@ -1,3 +1,5 @@
 node_modules/
 samples/*.xml
 .DS_Store
+__pycache__/
+*.pyc

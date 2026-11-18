@@ -3,14 +3,23 @@ import { parseRekordboxXml, buildRekordboxXml, buildM3u, buildTracklistText } fr
 import { filterTracks, keySet, sortTracks, setStats, transition, buildSet, median } from './planner.js';
 import { ALL_KEYS, parseCamelot } from './camelot.js';
 import { buildPrompt, parseAiResponse, askClaude } from './ai.js';
+import * as agent from './agent.js';
+import { createPlayer } from './player.js';
 
 const $ = (id) => document.getElementById(id);
-const LS_KEY = 'dj.apiKey', LS_MODEL = 'dj.model', LS_VIEW = 'dj.view', LS_CUR = 'dj.cur';
+const LS_KEY = 'dj.apiKey', LS_MODEL = 'dj.model', LS_VIEW = 'dj.view', LS_CUR = 'dj.cur', LS_AGENT = 'dj.agent';
 
 const S = {
   tracks: [], byId: new Map(), playlists: [], currentId: null,
   f: { text: '', bpmMin: '', bpmMax: '', key: '', keyMode: 'harmonic', genre: '', ratingMin: 0, sort: 'title', dir: 1 },
   list: [], shown: 0,
+  mode: 'local', rev: 0, playingId: null, // mode: 'local' (XML-import, IndexedDB) | 'agent' (Mac háttérprogram)
+};
+
+// Tároló: önálló módban IndexedDB, csatlakozott módban a Mac háttérprogramja.
+const store = {
+  put: (batch) => (S.mode === 'agent' ? Promise.all(batch.map(agent.putPlaylist)) : db.putPlaylists(batch)),
+  del: (id) => (S.mode === 'agent' ? agent.deletePlaylist(id) : db.deletePlaylist(id)),
 };
 
 /* ---------- segédek ---------- */
@@ -59,7 +68,10 @@ function prepare(tracks) {
 
 function keyBadge(t) {
   const p = parseCamelot(t.camelot);
-  return h('div', { class: `kb${p ? ` k${p.n}` : ' none'}`, title: t.key ? `Kulcs: ${t.key}` : 'Ismeretlen kulcs' }, t.camelot || '?');
+  const cls = `kb${p ? ` k${p.n}` : ' none'}${S.playingId === t.id ? ' playing' : ''}`;
+  if (S.mode !== 'agent') return h('div', { class: cls, title: t.key ? `Kulcs: ${t.key}` : 'Ismeretlen kulcs' }, t.camelot || '?');
+  return h('button', { class: cls, 'data-id': t.id, title: 'Meghallgatás', 'aria-label': `Meghallgatás: ${t.title}`,
+    onclick: (e) => { e.stopPropagation(); player?.play(t); } }, t.camelot || '?');
 }
 
 function subline(t) {
@@ -151,10 +163,11 @@ function flushSaves() {
   if (!pending.size) return Promise.resolve();
   const batch = [...pending];
   pending.clear();
-  return db.putPlaylists(batch).catch((e) => toast(`Mentési hiba: ${e.message}`));
+  return store.put(batch).catch((e) => toast(`Mentési hiba: ${e.message}`));
 }
 function persist(pl = cur(), now = false) {
-  if (!pl) return;
+  if (!pl || pl.readonly) return;
+  pl.unsaved = false;
   pl.updated = Date.now();
   pending.add(pl);
   clearTimeout(saveTimer);
@@ -169,7 +182,13 @@ function newPlaylist(name, trackIds = [], extra = {}) {
   return pl;
 }
 
+function editable() {
+  if (cur().readonly) { toast('Rekordbox-lista: csak olvasható. Másold le a ⋯ menüben.', 4000); return false; }
+  return true;
+}
+
 function addToSet(id) {
+  if (!editable()) return;
   const pl = cur();
   if (pl.trackIds.includes(id)) { toast('Már a szettben van.'); return; }
   pl.trackIds.push(id);
@@ -178,6 +197,7 @@ function addToSet(id) {
 }
 
 function moveInSet(i, d) {
+  if (!editable()) return;
   const a = cur().trackIds, j = i + d;
   if (j < 0 || j >= a.length) return;
   [a[i], a[j]] = [a[j], a[i]];
@@ -215,7 +235,7 @@ function renderSet() {
   let prev = null;
   pl.trackIds.forEach((id, i) => {
     const t = S.byId.get(id);
-    const remove = h('button', { class: 'danger', onclick: (e) => { e.stopPropagation(); pl.trackIds.splice(i, 1); persist(); renderSet(); } }, 'Eltávolít');
+    const remove = h('button', { class: 'danger', onclick: (e) => { e.stopPropagation(); if (!editable()) return; pl.trackIds.splice(i, 1); persist(); renderSet(); } }, 'Eltávolít');
     if (!t) {
       list.append(h('li', { class: 'track missing' }, h('div', { class: 'num' }, i + 1), h('div', { class: 'kb none' }, '?'),
         h('div', { class: 'meta' }, h('div', { class: 'title' }, `Hiányzó track #${id}`), h('div', { class: 'sub' }, 'Nincs az importált könyvtárban')), remove));
@@ -255,6 +275,7 @@ function bindSet() {
     persist(cur(), true); renderSet();
   });
   $('pl-rename').addEventListener('click', () => {
+    if (!editable()) return;
     const name = prompt('Lista neve:', cur().name);
     if (name) { cur().name = name.trim(); persist(); renderSet(); }
   });
@@ -263,19 +284,27 @@ function bindSet() {
     S.currentId = p.id; persist(p, true); renderSet();
   });
   $('pl-del').addEventListener('click', () => guarded(async () => {
+    if (cur().readonly) { toast('Rekordbox-lista: csak olvasható.'); return; }
     if (!confirm(`Törlöd a(z) "${cur().name}" listát?`)) return;
     const id = S.currentId;
     S.playlists = S.playlists.filter((p) => p.id !== id);
-    await db.deletePlaylist(id);
+    if (!cur().readonly) await store.del(id);
     if (!S.playlists.length) { newPlaylist('Új szett'); persist(S.playlists[0]); }
     S.currentId = S.playlists[0].id;
     renderSet();
   }));
   $('pl-clear').addEventListener('click', () => {
-    if (cur().trackIds.length && confirm('Kiüríted a szettet?')) { cur().trackIds = []; persist(); renderSet(); }
+    if (editable() && cur().trackIds.length && confirm('Kiüríted a szettet?')) { cur().trackIds = []; persist(); renderSet(); }
   });
-  $('ex-xml').addEventListener('click', () => saveFile(`${safeName(cur().name)}.xml`, 'text/xml', buildRekordboxXml([cur()], S.byId)));
-  $('ex-m3u').addEventListener('click', () => saveFile(`${safeName(cur().name)}.m3u8`, 'text/plain', buildM3u(cur().trackIds, S.byId)));
+  const exportList = (kind, mime, local) => guarded(async () => {
+    const pl = cur();
+    if (S.mode !== 'agent') return saveFile(`${safeName(pl.name)}.${kind === 'xml' ? 'xml' : 'm3u8'}`, mime, local(pl));
+    if (pl.readonly) throw new Error('Rekordbox-lista: előbb másold le (⋯ → Másolás).');
+    await flushSaves();
+    saveFile(`${safeName(pl.name)}.${kind === 'xml' ? 'xml' : 'm3u8'}`, mime, await agent.exportText(kind === 'xml' ? 'xml' : 'm3u8', pl.id));
+  });
+  $('ex-xml').addEventListener('click', () => exportList('xml', 'text/xml', (pl) => buildRekordboxXml([pl], S.byId)));
+  $('ex-m3u').addEventListener('click', () => exportList('m3u', 'text/plain', (pl) => buildM3u(pl.trackIds, S.byId)));
   $('ex-txt').addEventListener('click', () => guarded(async () => {
     await navigator.clipboard.writeText(buildTracklistText(cur().name, cur().trackIds, S.byId));
     toast('Tracklista a vágólapra másolva.');
@@ -301,8 +330,10 @@ function saveFile(name, mime, text) {
 
 /* ---------- import / adatok ---------- */
 function updateInfo() {
+  const wav = S.tracks.filter((t) => /wav/i.test(t.kind)).length;
+  if (S.mode === 'agent') { $('a-status').textContent = `Csatlakozva · ${S.tracks.length} track (${wav} WAV) · forrás: ${S.source || '?'}`; return; }
   $('d-info').textContent = S.tracks.length
-    ? `${S.tracks.length} track a helyi könyvtárban (${S.tracks.filter((t) => /wav/i.test(t.kind)).length} WAV).`
+    ? `${S.tracks.length} track a helyi könyvtárban (${wav} WAV).`
     : 'Még nincs importált gyűjtemény.';
 }
 
@@ -329,7 +360,18 @@ async function importXml(file) {
 
 function bindData() {
   $('d-file').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) guarded(() => importXml(f)); e.target.value = ''; });
-  $('d-xmlall').addEventListener('click', () => saveFile('dj-playlists.xml', 'text/xml', buildRekordboxXml(S.playlists.filter((p) => p.trackIds.length), S.byId)));
+  $('d-xmlall').addEventListener('click', () => guarded(async () => {
+    const own = S.playlists.filter((p) => !p.readonly && p.trackIds.length);
+    if (S.mode !== 'agent') return saveFile('dj-playlists.xml', 'text/xml', buildRekordboxXml(own, S.byId));
+    await flushSaves();
+    const r = await fetch('/api/export.xml', { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('Az export nem sikerült');
+    saveFile('dj-playlists.xml', 'text/xml', await r.text());
+  }));
+  $('a-refresh').addEventListener('click', () => guarded(async () => {
+    toast('Újraolvasás…', 30000);
+    await agent.refresh(); await loadAgentData(); toast('Könyvtár frissítve.');
+  }));
   $('d-backup').addEventListener('click', () => saveFile('dj-playlists-backup.json', 'application/json', JSON.stringify({ version: 1, playlists: S.playlists }, null, 1)));
   $('d-restore').addEventListener('change', (e) => guarded(async () => {
     const f = e.target.files[0]; e.target.value = '';
@@ -410,21 +452,113 @@ function bindAuto() {
   }));
 }
 
+/* ---------- csatlakozott mód (Mac háttérprogram) ---------- */
+let player = null;
+
+function askLogin() {
+  return new Promise((resolve) => {
+    $('login').hidden = false;
+    $('l-token').focus();
+    $('l-go').onclick = async () => {
+      try { await agent.login($('l-token').value.trim()); $('login').hidden = true; $('l-token').value = ''; $('l-err').textContent = ''; resolve(); }
+      catch (e) { $('l-err').textContent = e.message; }
+    };
+  });
+}
+
+function setConn(ok) {
+  const c = $('conn');
+  c.hidden = false; c.className = `conn${ok ? '' : ' off'}`;
+  c.textContent = ok ? '● Mac' : '● nem elérhető';
+}
+
+async function loadAgentData() {
+  let lib, pl;
+  for (;;) {
+    try { [lib, pl] = await Promise.all([agent.library(), agent.playlists()]); break; }
+    catch (e) { if (e.status !== 401) throw e; await askLogin(); }
+  }
+  S.tracks = prepare(lib.tracks);
+  S.byId = new Map(S.tracks.map((t) => [t.id, t]));
+  S.source = lib.source;
+  S.rev = (await agent.info()).rev;
+  const rb = pl.rekordbox.map((p, i) => ({ id: `rb-${i}`, name: `Rekordbox: ${[...p.path, p.name].join(' / ')}`, trackIds: p.trackIds, readonly: true, updated: 0 }));
+  mergePlaylists([...pl.playlists, ...rb]);
+  fillSelects(); refreshLibrary(); renderSet(); updateInfo();
+}
+
+// Szerver-állapot beolvasztása; a még mentetlen helyi módosítást nem írja felül.
+function mergePlaylists(remote) {
+  const ids = new Set(remote.map((p) => p.id));
+  const keep = S.playlists.filter((p) => pending.has(p) || (!ids.has(p.id) && !p.readonly && p.unsaved));
+  const out = remote.map((r) => keep.find((k) => k.id === r.id) || r);
+  for (const k of keep) if (!out.includes(k)) out.push(k);
+  S.playlists = out.sort((a, b) => (a.readonly ? 1 : 0) - (b.readonly ? 1 : 0) || b.updated - a.updated);
+  if (!S.playlists.some((p) => !p.readonly)) {
+    newPlaylist('Új szett').unsaved = true;
+    S.playlists.sort((x, y) => (x.readonly ? 1 : 0) - (y.readonly ? 1 : 0)); // a szerkeszthető lista elöl
+  }
+  if (!S.playlists.some((p) => p.id === S.currentId)) {
+    S.currentId = (S.playlists.find((p) => p.id === lsGet(LS_CUR)) || S.playlists.find((p) => !p.readonly)).id;
+  }
+}
+
+async function syncAgent() {
+  try {
+    const info = await agent.info();
+    if (info.rev !== S.rev) await loadAgentData();
+    else mergePlaylists((await agent.playlists()).playlists.concat(S.playlists.filter((p) => p.readonly)));
+    renderSet(); setConn(true);
+  } catch (e) { setConn(false); }
+}
+
+async function initAgent() {
+  S.mode = 'agent';
+  lsSet(LS_AGENT, '1');
+  $('import-card').hidden = true; $('agent-card').hidden = false; $('d-wipe').hidden = true;
+  player = createPlayer({
+    urlFor: (t) => agent.audioUrl(t.id),
+    nextOf: (t) => { const ids = cur().trackIds, i = ids.indexOf(t.id); return i >= 0 ? S.byId.get(ids[i + 1]) : null; },
+    onState: (t, playing) => {
+      S.playingId = playing ? t?.id : null;
+      for (const b of document.querySelectorAll('.kb[data-id]')) b.classList.toggle('playing', playing && b.dataset.id === t?.id);
+    },
+    onError: () => toast('A hang nem játszható le (hiányzik a fájl, vagy a Mac nem érhető el).', 5000),
+  });
+  const pair = /^#pair=(.+)$/.exec(location.hash);
+  if (pair) {
+    try { await agent.login(decodeURIComponent(pair[1])); } catch (e) { toast(`Párosítás sikertelen: ${e.message}`, 6000); }
+    history.replaceState(null, '', location.pathname);
+  }
+  await loadAgentData();
+  setConn(true);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncAgent(); });
+  setInterval(() => { if (document.visibilityState === 'visible') syncAgent(); }, 60000);
+}
+
 /* ---------- indulás ---------- */
 async function init() {
   for (const b of $('nav').children) b.addEventListener('click', () => setView(b.dataset.view));
   for (const b of document.querySelectorAll('[data-goto]')) b.addEventListener('click', () => setView(b.dataset.goto));
   bindFilters(); bindSet(); bindData(); bindAuto();
-  try {
-    S.tracks = prepare(await db.allTracks());
-    S.byId = new Map(S.tracks.map((t) => [t.id, t]));
-    S.playlists = (await db.allPlaylists()).sort((a, b) => b.updated - a.updated);
-  } catch (e) {
-    toast(`Az adatbázis nem érhető el: ${e.message}`, 8000);
+  let connected = false;
+  if (await agent.probe()) {
+    try { await initAgent(); connected = true; } catch (e) { S.mode = 'local'; toast(`A Mac nem érhető el: ${e.message}`, 6000); }
+  } else if (lsGet(LS_AGENT)) {
+    toast('A Mac háttérprogramja nem érhető el. Helyi adatokkal megy tovább.', 5000);
   }
-  if (!S.playlists.length) newPlaylist('Új szett');
-  S.currentId = (S.playlists.find((p) => p.id === lsGet(LS_CUR)) || S.playlists[0]).id;
-  fillSelects(); refreshLibrary(); renderSet(); updateInfo();
+  if (!connected) {
+    try {
+      S.tracks = prepare(await db.allTracks());
+      S.byId = new Map(S.tracks.map((t) => [t.id, t]));
+      S.playlists = (await db.allPlaylists()).sort((a, b) => b.updated - a.updated);
+    } catch (e) {
+      toast(`Az adatbázis nem érhető el: ${e.message}`, 8000);
+    }
+    if (!S.playlists.length) newPlaylist('Új szett');
+    S.currentId = (S.playlists.find((p) => p.id === lsGet(LS_CUR)) || S.playlists[0]).id;
+    fillSelects(); refreshLibrary(); renderSet(); updateInfo();
+  }
   setView(S.tracks.length ? lsGet(LS_VIEW) || 'library' : 'data');
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

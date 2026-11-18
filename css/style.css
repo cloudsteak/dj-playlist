@@ -110,6 +110,24 @@ label.check { flex-direction: row; align-items: center; gap: 10px; font-size: 14
 
 .toast { position: fixed; left: 50%; bottom: calc(var(--nav-h) + var(--safe-b) + 76px); transform: translateX(-50%); max-width: 90vw; padding: 10px 16px; background: #000; color: #fff; border-radius: 22px; z-index: 30; font-size: 14px; box-shadow: 0 4px 20px #000a; }
 
+/* ---- lejátszó, kapcsolat, belépés ---- */
+button.kb { border: 0; cursor: pointer; font: inherit; font-weight: 800; font-size: 15px; padding: 0; }
+.kb.playing { outline: 3px solid var(--text); outline-offset: 1px; }
+.conn { font-size: 12px; color: var(--ok); }
+.conn.off { color: var(--bad); }
+.top { display: flex; align-items: baseline; gap: 10px; }
+.player { position: fixed; z-index: 18; left: 12px; right: 12px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px); display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: color-mix(in srgb, var(--s3) 96%, transparent); backdrop-filter: blur(12px); border-radius: 14px; box-shadow: 0 6px 24px #000a; max-width: 760px; margin: 0 auto; }
+.pbtn { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 16px; cursor: pointer; flex: none; }
+.pmain { flex: 1; min-width: 0; }
+.pmain input[type=range] { width: 100%; min-height: 20px; padding: 0; background: none; accent-color: var(--accent); }
+.ptime { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.pclose { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; flex: none; padding: 6px; }
+body.has-player { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 92px); }
+body.has-player .exportbar { bottom: calc(var(--nav-h) + var(--safe-b) + 84px); }
+body.has-player .toast { bottom: calc(var(--nav-h) + var(--safe-b) + 150px); }
+.login { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: grid; place-items: center; padding: 16px; }
+.login .card { width: 100%; max-width: 420px; }
+
 /* Camelot-színkör */
 .k1 { --h: 170; } .k2 { --h: 145; } .k3 { --h: 115; } .k4 { --h: 85; } .k5 { --h: 55; } .k6 { --h: 32; }
 .k7 { --h: 8; } .k8 { --h: 345; } .k9 { --h: 315; } .k10 { --h: 275; } .k11 { --h: 228; } .k12 { --h: 198; }
@@ -132,4 +150,8 @@ label.check { flex-direction: row; align-items: center; gap: 10px; font-size: 14
   .sticky { margin: 0; padding-inline: 0; }
   .exportbar { bottom: 12px; }
   .toast { bottom: 28px; }
+  .player { bottom: 16px; }
+  body.has-player { padding-bottom: 100px; }
+  body.has-player .exportbar { bottom: 88px; }
+  body.has-player .toast { bottom: 100px; }
 }
