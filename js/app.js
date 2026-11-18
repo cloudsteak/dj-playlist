@@ -57,23 +57,21 @@ function prepare(tracks) {
   return tracks;
 }
 
-function keyChip(t) {
+function keyBadge(t) {
   const p = parseCamelot(t.camelot);
-  return h('span', { class: `chip key${p ? ` k${p.n}` : ''}` }, t.camelot || t.key || '?');
+  return h('div', { class: `kb${p ? ` k${p.n}` : ' none'}`, title: t.key ? `Kulcs: ${t.key}` : 'Ismeretlen kulcs' }, t.camelot || '?');
 }
 
-function trackRow(t, actions, extra) {
-  return h('li', { class: 'track' },
-    h('div', { class: 'meta' }, h('div', { class: 'title' }, t.title || '(cím nélkül)'), h('div', { class: 'artist' }, t.artist)),
-    h('div', { class: 'acts' }, ...actions),
-    h('div', { class: 'chips' },
-      h('span', { class: 'chip bpm' }, t.bpm ? `${t.bpm.toFixed(1)} BPM` : '– BPM'),
-      keyChip(t),
-      t.genre && h('span', { class: 'chip' }, t.genre),
-      h('span', { class: 'chip' }, fmtTime(t.duration)),
-      t.year ? h('span', { class: 'chip' }, String(t.year)) : null,
-      t.rating ? h('span', { class: 'chip' }, '★'.repeat(t.rating)) : null),
-    extra);
+function subline(t) {
+  return [t.artist, t.genre, fmtTime(t.duration), t.year || '', t.rating ? '★'.repeat(t.rating) : ''].filter(Boolean).join(' · ');
+}
+
+function bpmCell(t) {
+  return h('div', { class: 'bpm' }, h('b', {}, t.bpm ? t.bpm.toFixed(1) : '–'), h('small', {}, 'BPM'));
+}
+
+function metaCell(t) {
+  return h('div', { class: 'meta' }, h('div', { class: 'title' }, t.title || '(cím nélkül)'), h('div', { class: 'sub' }, subline(t)));
 }
 
 function currentFilters() {
@@ -82,6 +80,9 @@ function currentFilters() {
 }
 
 function refreshLibrary() {
+  const f = S.f;
+  const active = [f.bpmMin, f.bpmMax, f.key, f.genre, f.ratingMin].filter(Boolean).length;
+  $('f-active-n').textContent = String(active); $('f-active-n').hidden = !active;
   const filtered = filterTracks(S.tracks, currentFilters());
   S.list = sortTracks(filtered, S.f.sort, S.f.dir);
   S.shown = 0;
@@ -95,7 +96,9 @@ function renderMore() {
   if (S.shown >= S.list.length) return;
   const frag = document.createDocumentFragment();
   for (const t of S.list.slice(S.shown, S.shown + 60)) {
-    frag.append(trackRow(t, [h('button', { title: 'Hozzáadás a szetthez', 'aria-label': 'Hozzáadás', onclick: () => addToSet(t.id) }, '+')]));
+    const inSet = cur().trackIds.includes(t.id);
+    const btn = h('button', { class: `add${inSet ? ' done' : ''}`, 'aria-label': 'Hozzáadás a szetthez', onclick: () => { addToSet(t.id); btn.textContent = '✓'; btn.classList.add('done'); } }, inSet ? '✓' : '+');
+    frag.append(h('li', { class: 'track' }, keyBadge(t), metaCell(t), bpmCell(t), btn));
   }
   S.shown += 60;
   $('lib-list').append(frag);
@@ -212,31 +215,38 @@ function renderSet() {
   let prev = null;
   pl.trackIds.forEach((id, i) => {
     const t = S.byId.get(id);
-    const acts = [
-      h('button', { title: 'Illeszkedő következő keresése', 'aria-label': 'Következő keresése', onclick: () => t && findNext(t) }, '🔍'),
-      h('button', { 'aria-label': 'Fel', onclick: () => moveInSet(i, -1) }, '↑'),
-      h('button', { 'aria-label': 'Le', onclick: () => moveInSet(i, 1) }, '↓'),
-      h('button', { 'aria-label': 'Eltávolítás', onclick: () => { pl.trackIds.splice(i, 1); persist(); renderSet(); } }, '✕'),
-    ];
+    const remove = h('button', { class: 'danger', onclick: (e) => { e.stopPropagation(); pl.trackIds.splice(i, 1); persist(); renderSet(); } }, 'Eltávolít');
     if (!t) {
-      list.append(h('li', { class: 'track missing' }, h('div', { class: 'meta' }, h('div', { class: 'title' }, `(hiányzó track #${id})`)), h('div', { class: 'acts' }, acts[3])));
+      list.append(h('li', { class: 'track missing' }, h('div', { class: 'num' }, i + 1), h('div', { class: 'kb none' }, '?'),
+        h('div', { class: 'meta' }, h('div', { class: 'title' }, `Hiányzó track #${id}`), h('div', { class: 'sub' }, 'Nincs az importált könyvtárban')), remove));
       return;
     }
-    let extra = null;
+    let tr = null;
     if (prev) {
-      const tr = transition(prev, t);
+      const x = transition(prev, t);
       const parts = [];
-      if (tr.bpmDiff !== null) parts.push(`${tr.bpmDiff >= 0 ? '+' : ''}${tr.bpmDiff.toFixed(1)} BPM`);
-      parts.push(tr.keyDistance === null ? 'kulcs ismeretlen' : tr.keyDistance <= 1 ? 'harmonikus' : tr.keyDistance === 2 ? 'energia-ugrás' : 'kulcsütközés');
-      extra = h('div', { class: `trans ${tr.level}` }, `↳ ${parts.join(' · ')}`);
+      if (x.bpmDiff !== null) parts.push(`${x.bpmDiff >= 0 ? '+' : ''}${x.bpmDiff.toFixed(1)} BPM`);
+      parts.push(x.keyDistance === null ? 'kulcs ismeretlen' : x.keyDistance <= 1 ? 'harmonikus' : x.keyDistance === 2 ? 'energia-ugrás' : 'kulcsütközés');
+      tr = h('div', { class: `tr ${x.level}` }, parts.join(' · '));
     }
-    const row = trackRow(t, acts, extra);
+    const bar = h('div', { class: 'bar' },
+      h('button', { onclick: (e) => { e.stopPropagation(); findNext(t); } }, 'Illeszkedő következő'),
+      h('button', { 'aria-label': 'Feljebb', onclick: (e) => { e.stopPropagation(); moveInSet(i, -1); } }, '↑'),
+      h('button', { 'aria-label': 'Lejjebb', onclick: (e) => { e.stopPropagation(); moveInSet(i, 1); } }, '↓'),
+      remove);
+    const row = h('li', { class: 'track', onclick: () => {
+      const was = row.classList.contains('open');
+      for (const o of list.querySelectorAll('.open')) o.classList.remove('open');
+      if (!was) row.classList.add('open');
+    } }, tr, h('div', { class: 'num' }, i + 1), keyBadge(t), metaCell(t), bpmCell(t), bar);
     list.append(row);
     prev = t;
   });
 }
 
 function bindSet() {
+  $('pl-menu').addEventListener('click', (e) => { if (e.target.closest('.pop button')) setTimeout(() => ($('pl-menu').open = false), 0); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('#pl-menu')) $('pl-menu').open = false; });
   $('pl-select').addEventListener('change', (e) => { S.currentId = e.target.value; renderSet(); });
   $('pl-new').addEventListener('click', () => {
     const name = prompt('Új lista neve:', `Szett ${new Date().toLocaleDateString('hu-HU')}`);
@@ -403,6 +413,7 @@ function bindAuto() {
 /* ---------- indulás ---------- */
 async function init() {
   for (const b of $('nav').children) b.addEventListener('click', () => setView(b.dataset.view));
+  for (const b of document.querySelectorAll('[data-goto]')) b.addEventListener('click', () => setView(b.dataset.goto));
   bindFilters(); bindSet(); bindData(); bindAuto();
   try {
     S.tracks = prepare(await db.allTracks());

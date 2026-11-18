@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.anthropic.com; manifest-src 'self'; base-uri 'none'; form-action 'none'">
-  <meta name="theme-color" content="#0f1115">
+  <meta name="theme-color" content="#0b0c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="DJ Lista">
   <link rel="manifest" href="manifest.webmanifest">
@@ -17,135 +17,167 @@
   <header class="top">
     <h1>DJ Playlist</h1>
     <nav id="nav" class="nav">
-      <button data-view="library">Könyvtár</button>
-      <button data-view="set">Szett <span id="set-badge" class="badge">0</span></button>
-      <button data-view="auto">Auto / AI</button>
-      <button data-view="data">Adatok</button>
+      <button data-view="library">
+        <svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm11-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+        <span>Könyvtár</span>
+      </button>
+      <button data-view="set">
+        <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        <span>Szett</span><b id="set-badge" class="badge">0</b>
+      </button>
+      <button data-view="auto">
+        <svg viewBox="0 0 24 24"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3ZM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></svg>
+        <span>Auto / AI</span>
+      </button>
+      <button data-view="data">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        <span>Adatok</span>
+      </button>
     </nav>
   </header>
 
   <main class="app">
     <section id="view-library" class="view">
-      <div class="toolbar">
-        <input id="f-text" type="search" placeholder="Keresés: előadó, cím, műfaj, megjegyzés…" autocomplete="off">
-        <button id="f-toggle" class="btn">Szűrők</button>
+      <div class="sticky">
+        <div class="searchrow">
+          <input id="f-text" type="search" placeholder="Keresés…" autocomplete="off" enterkeyhint="search">
+          <button id="f-toggle" class="btn">Szűrők <b id="f-active-n" class="badge" hidden>0</b></button>
+        </div>
+        <div id="lib-count" class="count"></div>
       </div>
-      <div id="filters" class="filters" hidden>
-        <label>BPM tól <input id="f-bpmmin" type="number" inputmode="decimal" min="0" max="300"></label>
-        <label>BPM ig <input id="f-bpmmax" type="number" inputmode="decimal" min="0" max="300"></label>
-        <label>Kulcs
-          <select id="f-key"><option value="">Bármely</option></select>
-        </label>
-        <label>Kulcs-mód
-          <select id="f-keymode">
-            <option value="harmonic">Harmonikus (±1, relatív)</option>
-            <option value="energy">Harmonikus + energia (±2)</option>
-            <option value="exact">Pontosan ez</option>
-          </select>
-        </label>
-        <label>Műfaj <select id="f-genre"><option value="">Mind</option></select></label>
-        <label>Min. értékelés
-          <select id="f-rating"><option value="0">Mind</option><option value="1">★1+</option><option value="2">★2+</option><option value="3">★3+</option><option value="4">★4+</option><option value="5">★5</option></select>
-        </label>
-        <label>Rendezés
-          <select id="f-sort">
-            <option value="title">Cím</option><option value="artist">Előadó</option><option value="bpm">BPM</option>
-            <option value="key">Kulcs</option><option value="year">Év</option><option value="added">Hozzáadva</option>
-            <option value="rating">Értékelés</option><option value="duration">Hossz</option>
-          </select>
-        </label>
-        <button id="f-dir" class="btn" title="Rendezési irány">↑ Növekvő</button>
-        <button id="f-reset" class="btn">Szűrők törlése</button>
-      </div>
-      <div id="lib-count" class="muted"></div>
+        <div id="filters" class="card filters" hidden>
+          <label>BPM tól <input id="f-bpmmin" type="number" inputmode="decimal" min="0" max="300"></label>
+          <label>BPM ig <input id="f-bpmmax" type="number" inputmode="decimal" min="0" max="300"></label>
+          <label>Kulcs <select id="f-key"><option value="">Bármely</option></select></label>
+          <label>Kulcs-mód
+            <select id="f-keymode">
+              <option value="harmonic">Harmonikus (±1, relatív)</option>
+              <option value="energy">Harmonikus + energia (±2)</option>
+              <option value="exact">Pontosan ez</option>
+            </select>
+          </label>
+          <label>Műfaj <select id="f-genre"><option value="">Mind</option></select></label>
+          <label>Min. értékelés
+            <select id="f-rating"><option value="0">Mind</option><option value="1">★1+</option><option value="2">★2+</option><option value="3">★3+</option><option value="4">★4+</option><option value="5">★5</option></select>
+          </label>
+          <label>Rendezés
+            <select id="f-sort">
+              <option value="title">Cím</option><option value="artist">Előadó</option><option value="bpm">BPM</option>
+              <option value="key">Kulcs</option><option value="year">Év</option><option value="added">Hozzáadva</option>
+              <option value="rating">Értékelés</option><option value="duration">Hossz</option>
+            </select>
+          </label>
+          <div class="row2">
+            <button id="f-dir" class="btn">↑ Növekvő</button>
+            <button id="f-reset" class="btn">Törlés</button>
+          </div>
+        </div>
       <ul id="lib-list" class="tracks"></ul>
       <div id="lib-more" class="sentinel"></div>
       <div id="lib-empty" class="empty" hidden>
-        <p><strong>Még nincs zene a könyvtárban.</strong></p>
+        <h3>Üres a könyvtár</h3>
         <p>Rekordboxban: <em>File → Export Collection in xml format</em>, majd az <em>Adatok</em> fülön importáld az XML-t.</p>
+        <button class="btn primary" data-goto="data">Import megnyitása</button>
       </div>
     </section>
 
     <section id="view-set" class="view">
-      <div class="toolbar">
+      <div class="setbar">
         <select id="pl-select" aria-label="Lejátszási lista"></select>
+        <details id="pl-menu" class="menu">
+          <summary class="btn" aria-label="Lista műveletek">⋯</summary>
+          <div class="pop">
+            <button id="pl-new">Új lista</button>
+            <button id="pl-rename">Átnevezés</button>
+            <button id="pl-dup">Másolás</button>
+            <button id="pl-clear">Szett ürítése</button>
+            <button id="pl-del" class="danger">Lista törlése</button>
+          </div>
+        </details>
       </div>
-      <div class="toolbar wrap">
-        <button id="pl-new" class="btn">+ Új</button>
-        <button id="pl-rename" class="btn">Átnevez</button>
-        <button id="pl-dup" class="btn">Másol</button>
-        <button id="pl-del" class="btn danger">Töröl</button>
-        <button id="pl-clear" class="btn">Ürít</button>
-      </div>
-      <div id="set-stats" class="muted"></div>
+      <div id="set-stats" class="count"></div>
       <ol id="set-list" class="tracks set"></ol>
       <div id="set-empty" class="empty" hidden>
-        <p>A szett üres. A <em>Könyvtár</em> fülön a <strong>+</strong> gombbal adhatsz hozzá számokat, vagy használd az <em>Auto / AI</em> fület.</p>
+        <h3>A szett üres</h3>
+        <p>A Könyvtárban a <strong>+</strong> gombbal adhatsz hozzá számokat, vagy építtess szettet automatikusan.</p>
+        <div class="row2">
+          <button class="btn" data-goto="library">Könyvtár</button>
+          <button class="btn primary" data-goto="auto">Auto / AI</button>
+        </div>
       </div>
-      <div class="toolbar wrap export">
+      <div id="export-bar" class="exportbar">
         <button id="ex-xml" class="btn primary">Rekordbox XML</button>
         <button id="ex-m3u" class="btn">M3U8</button>
-        <button id="ex-txt" class="btn">Tracklista másolása</button>
+        <button id="ex-txt" class="btn">Másolás</button>
       </div>
     </section>
 
     <section id="view-auto" class="view">
-      <h2>Automatikus szettépítés</h2>
-      <p class="muted">A pool a Könyvtár <em>összes</em> trackje a megadott műfajjal. Az algoritmus BPM-ívet követ és harmonikus (Camelot) átmeneteket keres. Az eredmény új listába kerül.</p>
-      <div class="form">
-        <label>Track-ek száma <input id="a-count" type="number" min="3" max="200" value="20"></label>
-        <label>Kezdő BPM <input id="a-start" type="number" inputmode="decimal" placeholder="pl. 118"></label>
-        <label>Záró BPM <input id="a-end" type="number" inputmode="decimal" placeholder="pl. 126"></label>
-        <label>Műfaj <select id="a-genre"><option value="">Mind</option></select></label>
-        <label>Min. értékelés
-          <select id="a-rating"><option value="0">Mind</option><option value="1">★1+</option><option value="2">★2+</option><option value="3">★3+</option><option value="4">★4+</option></select>
-        </label>
-        <label>Kezdő track (opcionális, a szett aktuális első száma)
-          <select id="a-startmode"><option value="auto">Automatikus</option><option value="first">A jelenlegi szett első száma</option></select>
-        </label>
+      <div class="card">
+        <h2>Automatikus szettépítés</h2>
+        <p class="muted">BPM-ívet követ és harmonikus (Camelot) átmeneteket keres. Az eredmény új listába kerül.</p>
+        <div class="form">
+          <label>Track-ek száma <input id="a-count" type="number" min="3" max="200" value="20"></label>
+          <label>Műfaj <select id="a-genre"><option value="">Mind</option></select></label>
+          <label>Kezdő BPM <input id="a-start" type="number" inputmode="decimal" placeholder="pl. 118"></label>
+          <label>Záró BPM <input id="a-end" type="number" inputmode="decimal" placeholder="pl. 126"></label>
+          <label>Min. értékelés
+            <select id="a-rating"><option value="0">Mind</option><option value="1">★1+</option><option value="2">★2+</option><option value="3">★3+</option><option value="4">★4+</option></select>
+          </label>
+          <label>Kezdő track
+            <select id="a-startmode"><option value="auto">Automatikus</option><option value="first">A szett első száma</option></select>
+          </label>
+        </div>
+        <button id="a-offline" class="btn primary wide">Szett építése</button>
       </div>
-      <button id="a-offline" class="btn primary wide">Szett építése (offline)</button>
 
-      <h2>AI szettépítés (Claude)</h2>
-      <p class="muted">Szöveges kérés alapján az AI állítja össze a sorrendet. <strong>Csak metaadat</strong> (előadó, cím, BPM, kulcs, műfaj, év) megy ki az Anthropic API-nak, fájlútvonal nem. API-kulcs kell (Adatok fül).</p>
-      <label class="block">Kérés
-        <textarea id="a-brief" rows="3" placeholder="pl. péntek esti deep house szett, lassan építkező, a végén disco-s lezárás"></textarea>
-      </label>
-      <button id="a-ai" class="btn primary wide">Szett építése AI-val</button>
-      <div id="a-notes" class="notes" hidden></div>
+      <div class="card">
+        <h2>AI szettépítés (Claude)</h2>
+        <p class="muted">Szöveges kérés alapján az AI rendezi a sorrendet. Csak metaadat (előadó, cím, BPM, kulcs, műfaj, év) megy ki, fájlútvonal nem. API-kulcs kell az Adatok fülön. A fenti szűrők (műfaj, BPM, értékelés) itt is érvényesek.</p>
+        <label class="block">Kérés
+          <textarea id="a-brief" rows="3" placeholder="pl. péntek esti deep house, lassan építkező, a végén disco-s lezárás"></textarea>
+        </label>
+        <button id="a-ai" class="btn primary wide">Szett építése AI-val</button>
+        <div id="a-notes" class="notes" hidden></div>
+      </div>
     </section>
 
     <section id="view-data" class="view">
-      <h2>Rekordbox gyűjtemény importálása</h2>
-      <ol class="steps">
-        <li>Mac-en, Rekordboxban: <em>File → Export Collection in xml format</em>.</li>
-        <li>Vidd át a fájlt a telefonra (AirDrop / iCloud Drive / Fájlok).</li>
-        <li>Itt válaszd ki az XML-t.</li>
-      </ol>
-      <label class="check"><input id="d-pl" type="checkbox" checked> A Rekordbox lejátszási listáit is importáld</label>
-      <input id="d-file" type="file" accept=".xml,text/xml,application/xml">
-      <div id="d-info" class="muted"></div>
-
-      <h2>Export</h2>
-      <div class="toolbar wrap">
-        <button id="d-xmlall" class="btn">Összes lista → Rekordbox XML</button>
-        <button id="d-backup" class="btn">Mentés (JSON)</button>
-        <label class="btn file">Visszaállítás <input id="d-restore" type="file" accept=".json,application/json" hidden></label>
+      <div class="card">
+        <h2>Rekordbox gyűjtemény importálása</h2>
+        <ol class="steps">
+          <li>Mac-en, Rekordboxban: <em>File → Export Collection in xml format</em>.</li>
+          <li>Vidd át a fájlt a telefonra (AirDrop / iCloud Drive).</li>
+          <li>Itt válaszd ki az XML-t.</li>
+        </ol>
+        <label class="check"><input id="d-pl" type="checkbox" checked> A Rekordbox lejátszási listáit is importáld</label>
+        <label class="btn primary wide filebtn">XML kiválasztása <input id="d-file" type="file" accept=".xml,text/xml,application/xml" hidden></label>
+        <div id="d-info" class="muted"></div>
       </div>
-      <p class="muted">Visszaolvasás Rekordboxba: <em>Preferences → Advanced → Database → rekordbox xml</em> → add meg az exportált XML-t, majd a bal oldali <em>rekordbox xml</em> fában jobb klikk a listán → <em>Import Playlist</em>.</p>
 
-      <h2>AI beállítások</h2>
-      <label class="block">Anthropic API-kulcs
-        <input id="s-key" type="password" autocomplete="off" placeholder="sk-ant-…">
-      </label>
-      <label class="block">Modell <input id="s-model" type="text" value="claude-sonnet-5-5"></label>
-      <div class="toolbar wrap">
-        <button id="s-save" class="btn">Mentés</button>
-        <button id="s-forget" class="btn danger">Kulcs törlése</button>
+      <div class="card">
+        <h2>Export és mentés</h2>
+        <div class="btnrow">
+          <button id="d-xmlall" class="btn">Összes lista → XML</button>
+          <button id="d-backup" class="btn">Mentés (JSON)</button>
+          <label class="btn">Visszaállítás <input id="d-restore" type="file" accept=".json,application/json" hidden></label>
+        </div>
+        <p class="muted">Visszaolvasás Rekordboxba: <em>Preferences → Advanced → Database → rekordbox xml</em> → add meg az XML-t, majd a <em>rekordbox xml</em> fában jobb klikk a listán → <em>Import Playlist</em>.</p>
       </div>
-      <p class="muted">A kulcs csak ezen a készüléken, a böngésző helyi tárolójában van. Az app semmi mást nem küld sehova.</p>
 
-      <h2>Adatok törlése</h2>
+      <div class="card">
+        <h2>AI beállítások</h2>
+        <label class="block">Anthropic API-kulcs
+          <input id="s-key" type="password" autocomplete="off" placeholder="sk-ant-…">
+        </label>
+        <label class="block">Modell <input id="s-model" type="text" value="claude-sonnet-5-5"></label>
+        <div class="btnrow">
+          <button id="s-save" class="btn primary">Mentés</button>
+          <button id="s-forget" class="btn danger">Kulcs törlése</button>
+        </div>
+        <p class="muted">A kulcs csak ezen a készüléken van. Az app semmi mást nem küld sehova.</p>
+      </div>
+
       <button id="d-wipe" class="btn danger">Minden helyi adat törlése</button>
     </section>
   </main>
