@@ -1,0 +1,12 @@
+{
+  "name": "dj-playlist",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first PWA DJ lejátszási lista tervező Rekordbox XML-lel",
+  "scripts": {
+    "test": "node --test test/core.test.js",
+    "serve": "python3 -m http.server 8080",
+    "sample": "node tools/gen-sample.mjs"
+  }
+}
